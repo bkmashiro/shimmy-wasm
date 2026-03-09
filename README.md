@@ -180,24 +180,118 @@ shimmy-wasm exec hello.c --timeout 5
 
 **Recommended:** `wasmtime` for Lambda (good balance of speed and size)
 
+## Testing
+
+```bash
+# Install test dependencies
+pip install pytest
+
+# Run tests
+python -m pytest tests/ -v
+
+# Run specific test
+python -m pytest tests/test_sandbox.py::TestSecurity -v
+```
+
+### Test Categories
+
+| Category | Tests | Description |
+|----------|:-----:|-------------|
+| Compilation | 3 | C/C++ to WASM compilation |
+| Execution | 3 | Basic execution, return codes |
+| Security | 3 | Network, filesystem isolation |
+| Resources | 3 | Timeout, fuel, memory limits |
+
+## Benchmarks
+
+```bash
+python tests/benchmark.py
+```
+
+### Expected Results
+
+| Benchmark | Native | WASM | Overhead |
+|-----------|:------:|:----:|:--------:|
+| Hello World | ~1ms | ~5ms | ~5x |
+| Compute (100k sqrt) | ~3ms | ~6ms | ~2x |
+| Fibonacci(35) | ~50ms | ~80ms | ~1.6x |
+| Memory (1MB) | ~2ms | ~5ms | ~2.5x |
+
+**Conclusion:** WASM overhead is ~1.5-3x for CPU-bound tasks, acceptable for sandboxing.
+
+## WASI Capabilities
+
+Control what the sandboxed code can access:
+
+```python
+config = SandboxConfig(
+    # Resource limits
+    timeout=5,
+    memory_mb=128,
+    fuel=1_000_000_000,
+    
+    # Capabilities (all False = max isolation)
+    allow_fs_read=False,    # Filesystem read
+    allow_fs_write=False,   # Filesystem write  
+    allow_env=False,        # Environment variables
+    allow_clock=True,       # Time access
+    allow_random=True,      # Random numbers
+    
+    # Preopened paths (needs allow_fs_*)
+    allowed_dirs=["/tmp:rw", "/data:ro"],
+)
+```
+
+### Capability Matrix
+
+| Capability | Default | Flag | Use Case |
+|------------|:-------:|------|----------|
+| Filesystem Read | ❌ | `allow_fs_read` | Read input files |
+| Filesystem Write | ❌ | `allow_fs_write` | Write output files |
+| Network | ❌ | N/A (WASI limitation) | - |
+| Environment | ❌ | `allow_env` | Config via env vars |
+| Clock | ✅ | `allow_clock` | Time measurement |
+| Random | ✅ | `allow_random` | RNG |
+| Process Spawn | ❌ | N/A (WASI limitation) | - |
+
+## Python Support
+
+Execute Python code in WASM sandbox:
+
+```python
+from src import PythonWasmSandbox
+
+sandbox = PythonWasmSandbox(runtime='micropython')
+result = sandbox.run('print(sum(range(100)))')
+print(result.output)  # "4950"
+```
+
+### Supported Runtimes
+
+| Runtime | Size | Features | Speed |
+|---------|:----:|----------|:-----:|
+| MicroPython | 300KB | Basic | Fast |
+| RustPython | 5MB | More stdlib | Medium |
+| Pyodide | 15MB | Full CPython | Slow |
+
 ## Project Structure
 
 ```
 shimmy-wasm/
 ├── src/
-│   ├── compiler.py     # Multi-language compiler
-│   ├── runtime.py      # WASM runtime wrapper
-│   ├── sandbox.py      # High-level sandbox API
-│   └── cli.py          # Command line interface
-├── runtimes/
-│   └── wasmtime/       # Bundled wasmtime binary
+│   ├── __init__.py
+│   ├── sandbox.py          # Main sandbox API
+│   └── python_sandbox.py   # Python WASM support
 ├── examples/
 │   ├── hello.c
 │   ├── hello.rs
-│   └── hello.go
+│   ├── hello.py
+│   └── compute.c
 ├── tests/
-│   └── test_sandbox.py
-├── Dockerfile          # Lambda layer builder
+│   ├── test_sandbox.py     # Unit tests
+│   └── benchmark.py        # Performance benchmarks
+├── shimmy-wasm             # CLI entry point
+├── setup.py
 └── README.md
 ```
 

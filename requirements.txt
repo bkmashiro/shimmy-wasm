@@ -1,0 +1,4 @@
+# Runtime (no dependencies, uses system wasmtime)
+
+# Development
+pytest>=7.0.0
