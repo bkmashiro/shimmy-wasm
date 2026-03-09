@@ -24,13 +24,27 @@ class Language(Enum):
 @dataclass
 class SandboxConfig:
     """Sandbox configuration."""
+    # Resource limits
     timeout: int = 5                    # Seconds
     memory_mb: int = 128                # Memory limit
     fuel: int = 1_000_000_000           # Instruction limit (wasmtime fuel)
     max_output: int = 1024 * 1024       # 1MB output limit
+    
+    # WASI capabilities (all False = maximum isolation)
+    allow_fs_read: bool = False         # Allow filesystem reads
+    allow_fs_write: bool = False        # Allow filesystem writes
+    allow_env: bool = False             # Allow environment access
+    allow_clock: bool = True            # Allow clock access (usually harmless)
+    allow_random: bool = True           # Allow random number generation
+    
+    # Preopened paths (only effective if allow_fs_* is True)
     allowed_dirs: List[str] = field(default_factory=list)  # Preopened directories
     allowed_files: List[str] = field(default_factory=list) # Preopened files
-    env: Dict[str, str] = field(default_factory=dict)      # Environment variables
+    
+    # Environment (only effective if allow_env is True)
+    env: Dict[str, str] = field(default_factory=dict)
+    
+    # Input
     stdin: Optional[str] = None
 
 @dataclass 
@@ -254,20 +268,32 @@ class WasmSandbox:
                 f"--max-memory-size={cfg.memory_mb}M",
             ]
             
-            # Add preopened directories
-            for dir_spec in cfg.allowed_dirs:
-                if ':' in dir_spec:
-                    path, mode = dir_spec.rsplit(':', 1)
-                    if mode == 'ro':
-                        cmd.extend(["--dir", f"{path}::ro"])
-                    else:
-                        cmd.extend(["--dir", path])
-                else:
-                    cmd.extend(["--dir", dir_spec])
+            # WASI capability flags
+            if not cfg.allow_clock:
+                cmd.append("--wasi=cli:deny-clock")
+            if not cfg.allow_random:
+                cmd.append("--wasi=cli:deny-random")
             
-            # Add environment variables
-            for key, value in cfg.env.items():
-                cmd.extend(["--env", f"{key}={value}"])
+            # Filesystem access
+            if cfg.allow_fs_read or cfg.allow_fs_write:
+                # Add preopened directories
+                for dir_spec in cfg.allowed_dirs:
+                    if ':' in dir_spec:
+                        path, mode = dir_spec.rsplit(':', 1)
+                        if mode == 'ro' or (not cfg.allow_fs_write):
+                            cmd.extend(["--dir", f"{path}::ro"])
+                        else:
+                            cmd.extend(["--dir", path])
+                    else:
+                        if cfg.allow_fs_write:
+                            cmd.extend(["--dir", dir_spec])
+                        else:
+                            cmd.extend(["--dir", f"{dir_spec}::ro"])
+            
+            # Environment variables (only if allowed)
+            if cfg.allow_env:
+                for key, value in cfg.env.items():
+                    cmd.extend(["--env", f"{key}={value}"])
             
             # Add WASM file
             cmd.append(str(wasm_path))
