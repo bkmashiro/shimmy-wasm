@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.wasm
+*.o
+.venv/
+dist/
+*.egg-info/
+.DS_Store
