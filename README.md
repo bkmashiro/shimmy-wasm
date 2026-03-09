@@ -325,6 +325,30 @@ config = SandboxConfig(
 )
 ```
 
+## Threading
+
+### Status: Not Implemented (Possible but Unnecessary)
+
+WASM supports threads via `wasm32-wasi-threads` target, but we intentionally don't implement it:
+
+| Reason | Explanation |
+|--------|-------------|
+| **Security** | SharedArrayBuffer + timing = Spectre risk |
+| **Complexity** | Adds attack surface |
+| **Use Case** | Sandbox execution rarely needs parallelism |
+
+If threading becomes necessary in the future:
+
+```python
+# Would require these config options (not implemented):
+# allow_threads: bool = False
+# max_threads: int = 4
+# allow_shared_memory: bool = False
+
+# Compiler: clang --target=wasm32-wasi-threads -pthread
+# Runtime: wasmtime --wasm-threads=y --max-threads=4
+```
+
 ## Python Support
 
 Execute Python code in WASM sandbox:

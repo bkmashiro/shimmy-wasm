@@ -133,12 +133,23 @@ class SandboxConfig:
     # 🟠 Warning: Debug info may leak internal state
     enable_debug: bool = False
     
-    # 🟡 Caution: WASM threads (experimental)
-    allow_threads: bool = False
-    max_threads: int = 4
-    
-    # 🟠 Warning: Shared memory between threads
-    allow_shared_memory: bool = False
+    # ================================================================
+    # Threading (NOT IMPLEMENTED - documented for completeness)
+    # ================================================================
+    # WASM threads ARE possible via:
+    #   - wasm32-wasi-threads target
+    #   - wasmtime --wasm-threads=y
+    #   - SharedArrayBuffer + Atomics
+    # 
+    # Not implemented because:
+    #   1. Our use case is sandboxing untrusted code (single-threaded sufficient)
+    #   2. Threads + high-precision timing = Spectre side-channel risk
+    #   3. Adds complexity without clear benefit
+    #
+    # If needed in future, add:
+    #   allow_threads: bool = False
+    #   max_threads: int = 4
+    #   allow_shared_memory: bool = False
     
     # 🔴 DANGEROUS: SIMD instructions (potential side-channel attacks)
     allow_simd: bool = True  # Usually safe, disable for maximum security
