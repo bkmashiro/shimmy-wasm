@@ -253,8 +253,12 @@ class WasmSandbox:
         """
         cfg = config or self.config
         
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="shimmy_wasm_") as tmpdir:
             tmpdir = Path(tmpdir)
+            
+            # Create isolated /tmp for the sandbox
+            sandbox_tmp = tmpdir / "sandbox_tmp"
+            sandbox_tmp.mkdir()
             
             # Write WASM to temp file
             wasm_path = tmpdir / "program.wasm"
@@ -274,9 +278,12 @@ class WasmSandbox:
             if not cfg.allow_random:
                 cmd.append("--wasi=cli:deny-random")
             
-            # Filesystem access
+            # Always provide isolated /tmp (mapped to sandbox_tmp)
+            # WASM sees /tmp, but it's actually our isolated directory
+            cmd.extend(["--dir", f"{sandbox_tmp}::/tmp"])
+            
+            # Additional filesystem access
             if cfg.allow_fs_read or cfg.allow_fs_write:
-                # Add preopened directories
                 for dir_spec in cfg.allowed_dirs:
                     if ':' in dir_spec:
                         path, mode = dir_spec.rsplit(':', 1)
