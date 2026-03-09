@@ -221,38 +221,109 @@ python tests/benchmark.py
 
 ## WASI Capabilities
 
-Control what the sandboxed code can access:
+Full control over sandbox capabilities with safety annotations.
+
+### Safety Levels
+
+| Level | Meaning |
+|:-----:|---------|
+| 🟢 | Safe - No security impact |
+| 🟡 | Caution - Limited risk, usually safe |
+| 🟠 | Warning - Potential information leak |
+| 🔴 | Dangerous - Can cause side effects |
+| ❌ | Blocked - Not possible in WASI |
+
+### Complete Configuration
 
 ```python
 config = SandboxConfig(
-    # Resource limits
-    timeout=5,
-    memory_mb=128,
-    fuel=1_000_000_000,
+    # ====== Resource Limits (🟢 Safe) ======
+    timeout=5,                  # Wall clock timeout (seconds)
+    memory_mb=128,              # Memory limit
+    fuel=1_000_000_000,         # Instruction limit (CPU)
+    max_output=1024*1024,       # Max stdout/stderr (1MB)
     
-    # Capabilities (all False = max isolation)
-    allow_fs_read=False,    # Filesystem read
-    allow_fs_write=False,   # Filesystem write  
-    allow_env=False,        # Environment variables
-    allow_clock=True,       # Time access
-    allow_random=True,      # Random numbers
+    # ====== Filesystem (🟡/🔴) ======
+    allow_fs_read=False,        # 🟡 Read allowed paths
+    allow_fs_write=False,       # 🔴 Write (safe if ephemeral=True)
+    allowed_dirs=["/data:ro"],  # Preopened directories
+    allowed_files=[],           # Preopened files
     
-    # Preopened paths (needs allow_fs_*)
-    allowed_dirs=["/tmp:rw", "/data:ro"],
+    # ====== Environment (🟠) ======
+    allow_env=False,            # 🟠 Pass env vars to sandbox
+    env={"KEY": "value"},       # Env vars to pass
+    allow_args=True,            # 🟡 Program sees arguments
+    args=["arg1", "arg2"],      # Arguments to pass
+    
+    # ====== Time & Random (🟢) ======
+    allow_clock=True,           # 🟢 Wall clock access
+    allow_monotonic_clock=True, # 🟡 Monotonic clock (timing)
+    allow_random=True,          # 🟢 Random numbers
+    
+    # ====== Standard I/O (🟢/🟡) ======
+    stdin="input data",         # 🟢 Input data
+    inherit_stdout=True,        # 🟢 Capture stdout
+    inherit_stderr=True,        # 🟢 Capture stderr
+    inherit_stdin=False,        # 🟡 Host stdin (caution)
+    
+    # ====== Network (🔴 Experimental) ======
+    allow_tcp_listen=False,     # 🔴 Listen on ports
+    allow_tcp_connect=False,    # 🔴 Outbound connections
+    allow_udp=False,            # 🔴 UDP sockets
+    tcp_listen_ports=[8080],    # Allowed ports
+    
+    # ====== Advanced (🟡/🟠) ======
+    allow_threads=False,        # 🟡 WASM threads
+    max_threads=4,              # Max thread count
+    allow_shared_memory=False,  # 🟠 Shared memory
+    allow_simd=True,            # 🟡 SIMD instructions
+    enable_debug=False,         # 🟠 Debug info
+    
+    # ====== Ephemeral Mode (🟢) ======
+    ephemeral=True,             # 🟢 No side effects
+    collect_output_files=False, # 🟢 Get files from /tmp
+    output_dir=None,            # Where to save output
 )
 ```
 
 ### Capability Matrix
 
-| Capability | Default | Flag | Use Case |
-|------------|:-------:|------|----------|
-| Filesystem Read | ❌ | `allow_fs_read` | Read input files |
-| Filesystem Write | ❌ | `allow_fs_write` | Write output files |
-| Network | ❌ | N/A (WASI limitation) | - |
-| Environment | ❌ | `allow_env` | Config via env vars |
-| Clock | ✅ | `allow_clock` | Time measurement |
-| Random | ✅ | `allow_random` | RNG |
-| Process Spawn | ❌ | N/A (WASI limitation) | - |
+| Capability | Default | Safety | Side Effects |
+|------------|:-------:|:------:|:------------:|
+| Filesystem Read | ❌ | 🟡 | None |
+| Filesystem Write | ❌ | 🔴 | ⚠️ If ephemeral=False |
+| Environment | ❌ | 🟠 | None |
+| Clock | ✅ | 🟢 | None |
+| Random | ✅ | 🟢 | None |
+| TCP Listen | ❌ | 🔴 | Network exposure |
+| TCP Connect | ❌ | 🔴 | Data exfiltration |
+| Threads | ❌ | 🟡 | None |
+| SIMD | ✅ | 🟡 | Side-channel risk |
+| **Process Spawn** | ❌ | ❌ | **Not possible** |
+| **Signals** | ❌ | ❌ | **Not possible** |
+| **Raw Syscalls** | ❌ | ❌ | **Not possible** |
+
+### ⚠️ Dangerous Combinations
+
+```python
+# 🔴 DANGEROUS: Can modify host files!
+config = SandboxConfig(
+    allow_fs_write=True,
+    ephemeral=False,  # Writes persist!
+    allowed_dirs=["/important/data"],
+)
+
+# 🔴 DANGEROUS: Data exfiltration possible!
+config = SandboxConfig(
+    allow_tcp_connect=True,  # Can send data out
+)
+
+# 🟢 SAFE: Even with writes enabled
+config = SandboxConfig(
+    allow_fs_write=True,
+    ephemeral=True,  # All writes discarded
+)
+```
 
 ## Python Support
 

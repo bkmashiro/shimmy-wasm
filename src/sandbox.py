@@ -23,37 +23,164 @@ class Language(Enum):
 
 @dataclass
 class SandboxConfig:
-    """Sandbox configuration."""
-    # Resource limits
-    timeout: int = 5                    # Seconds
-    memory_mb: int = 128                # Memory limit
-    fuel: int = 1_000_000_000           # Instruction limit (wasmtime fuel)
-    max_output: int = 1024 * 1024       # 1MB output limit
+    """
+    Sandbox configuration with full WASI capability control.
     
-    # WASI capabilities (all False = maximum isolation)
-    allow_fs_read: bool = False         # Allow filesystem reads
-    allow_fs_write: bool = False        # Allow filesystem writes
-    allow_env: bool = False             # Allow environment access
-    allow_clock: bool = True            # Allow clock access (usually harmless)
-    allow_random: bool = True           # Allow random number generation
+    SAFETY LEVELS:
+    - 🟢 Safe: No security impact
+    - 🟡 Caution: Limited risk, usually safe
+    - 🟠 Warning: Potential information leak
+    - 🔴 Dangerous: Can cause side effects or security issues
+    """
     
-    # Preopened paths (only effective if allow_fs_* is True)
-    allowed_dirs: List[str] = field(default_factory=list)  # Preopened directories
-    allowed_files: List[str] = field(default_factory=list) # Preopened files
+    # ================================================================
+    # Resource Limits (🟢 Safe)
+    # ================================================================
+    timeout: int = 5                    # Seconds (wall clock)
+    memory_mb: int = 128                # Memory limit in MB
+    fuel: int = 1_000_000_000           # Instruction limit (CPU bound)
+    max_output: int = 1024 * 1024       # Max stdout/stderr size (1MB)
     
-    # Environment (only effective if allow_env is True)
+    # ================================================================
+    # Filesystem Capabilities
+    # ================================================================
+    
+    # 🟡 Caution: Can read allowed paths
+    allow_fs_read: bool = False
+    
+    # 🔴 DANGEROUS: Can modify files if ephemeral=False
+    # With ephemeral=True, writes go to temp copies (safe)
+    allow_fs_write: bool = False
+    
+    # Preopened directories (format: "/path" or "/path:ro" or "/path:rw")
+    allowed_dirs: List[str] = field(default_factory=list)
+    
+    # Preopened files (format: "/path/file" or "/path/file:ro")
+    allowed_files: List[str] = field(default_factory=list)
+    
+    # ================================================================
+    # Environment & Arguments
+    # ================================================================
+    
+    # 🟠 Warning: May leak sensitive env vars if True
+    # Only passes vars from 'env' dict, not host env
+    allow_env: bool = False
     env: Dict[str, str] = field(default_factory=dict)
     
-    # Input
+    # 🟡 Caution: Program can see its arguments
+    allow_args: bool = True
+    args: List[str] = field(default_factory=list)
+    
+    # ================================================================
+    # Time & Random (🟢 Usually Safe)
+    # ================================================================
+    
+    # 🟢 Safe: Clock access (time measurement)
+    allow_clock: bool = True
+    
+    # 🟢 Safe: Random number generation
+    allow_random: bool = True
+    
+    # 🟡 Caution: Monotonic clock (can measure timing)
+    allow_monotonic_clock: bool = True
+    
+    # ================================================================
+    # Standard I/O
+    # ================================================================
+    
+    # 🟢 Safe: stdin data
     stdin: Optional[str] = None
     
-    # Ephemeral mode: no side effects after execution
-    # All filesystem writes go to temp copies, discarded after run
-    ephemeral: bool = True              # Default: no side effects
+    # 🟢 Safe: Inherit stdout/stderr
+    inherit_stdout: bool = True
+    inherit_stderr: bool = True
     
-    # Output collection (only in ephemeral mode)
-    collect_output_files: bool = False  # Collect files written to /tmp
-    output_dir: Optional[str] = None    # Where to copy output files
+    # 🟡 Caution: Inherit stdin from host
+    inherit_stdin: bool = False
+    
+    # ================================================================
+    # Network (WASI Preview 2 / Experimental)
+    # ================================================================
+    
+    # 🔴 DANGEROUS: Network access (experimental, usually not available)
+    # Most WASI runtimes don't support this yet
+    allow_tcp_listen: bool = False      # Listen on TCP ports
+    allow_tcp_connect: bool = False     # Outbound TCP connections
+    allow_udp: bool = False             # UDP sockets
+    tcp_listen_ports: List[int] = field(default_factory=list)  # Allowed ports
+    
+    # ================================================================
+    # Process (Not in WASI - always blocked)
+    # ================================================================
+    # allow_spawn: bool = False  # NOT SUPPORTED IN WASI
+    # allow_signals: bool = False  # NOT SUPPORTED IN WASI
+    
+    # ================================================================
+    # Ephemeral Mode (Side Effect Control)
+    # ================================================================
+    
+    # 🟢 Safe: No persistent side effects
+    ephemeral: bool = True
+    
+    # 🟢 Safe: Collect output files from sandbox /tmp
+    collect_output_files: bool = False
+    output_dir: Optional[str] = None
+    
+    # ================================================================
+    # Advanced / Debugging
+    # ================================================================
+    
+    # 🟠 Warning: Debug info may leak internal state
+    enable_debug: bool = False
+    
+    # 🟡 Caution: WASM threads (experimental)
+    allow_threads: bool = False
+    max_threads: int = 4
+    
+    # 🟠 Warning: Shared memory between threads
+    allow_shared_memory: bool = False
+    
+    # 🔴 DANGEROUS: SIMD instructions (potential side-channel attacks)
+    allow_simd: bool = True  # Usually safe, disable for maximum security
+
+
+# ================================================================
+# Safety Documentation
+# ================================================================
+
+CAPABILITY_SAFETY = """
+## WASI Capability Safety Reference
+
+### 🟢 Safe (No Security Impact)
+- timeout, memory_mb, fuel, max_output
+- allow_clock, allow_random
+- stdin, inherit_stdout, inherit_stderr
+- ephemeral=True, collect_output_files
+
+### 🟡 Caution (Limited Risk)
+- allow_fs_read (can read allowed paths only)
+- allow_env (only exposes provided env dict)
+- allow_args (program sees its arguments)
+- allow_monotonic_clock (timing measurements)
+- allow_threads (experimental)
+
+### 🟠 Warning (Information Leak Possible)
+- enable_debug (internal state visible)
+- allow_shared_memory (side-channel risk)
+- inherit_stdin (host input exposed)
+
+### 🔴 Dangerous (Side Effects / Security Risk)
+- allow_fs_write + ephemeral=False (MODIFIES HOST FILES!)
+- allow_tcp_listen (network exposure)
+- allow_tcp_connect (data exfiltration)
+- allow_udp (network access)
+
+### ❌ Not Supported (Always Blocked by WASI)
+- Process spawning (fork/exec)
+- Signal handling
+- Raw syscalls
+- Direct memory access outside sandbox
+"""
 
 @dataclass 
 class ExecutionResult:
@@ -281,11 +408,37 @@ class WasmSandbox:
                 f"--max-memory-size={cfg.memory_mb}M",
             ]
             
-            # WASI capability flags
+            # ====== WASI capability flags ======
+            
+            # Clock access
             if not cfg.allow_clock:
                 cmd.append("--wasi=cli:deny-clock")
+            
+            # Random number generation
             if not cfg.allow_random:
                 cmd.append("--wasi=cli:deny-random")
+            
+            # Threading
+            if cfg.allow_threads:
+                cmd.append("--wasm-threads=y")
+                cmd.extend(["--max-threads", str(cfg.max_threads)])
+            
+            # SIMD
+            if not cfg.allow_simd:
+                cmd.append("--wasm-simd=n")
+            
+            # Network (experimental - may not work on all versions)
+            if cfg.allow_tcp_listen:
+                for port in cfg.tcp_listen_ports:
+                    cmd.extend(["--tcplisten", f"127.0.0.1:{port}"])
+            
+            # Debug
+            if cfg.enable_debug:
+                cmd.append("--debug-info")
+            
+            # Arguments
+            if cfg.allow_args and cfg.args:
+                # Args go after -- and wasm file
             
             # Always provide isolated /tmp (mapped to sandbox_tmp)
             # WASM sees /tmp, but it's actually our isolated directory
