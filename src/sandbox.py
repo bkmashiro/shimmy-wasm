@@ -46,6 +46,14 @@ class SandboxConfig:
     
     # Input
     stdin: Optional[str] = None
+    
+    # Ephemeral mode: no side effects after execution
+    # All filesystem writes go to temp copies, discarded after run
+    ephemeral: bool = True              # Default: no side effects
+    
+    # Output collection (only in ephemeral mode)
+    collect_output_files: bool = False  # Collect files written to /tmp
+    output_dir: Optional[str] = None    # Where to copy output files
 
 @dataclass 
 class ExecutionResult:
@@ -57,6 +65,7 @@ class ExecutionResult:
     error: Optional[str] = None
     fuel_consumed: int = 0
     time_ms: int = 0
+    output_files: Dict[str, bytes] = field(default_factory=dict)  # Files from /tmp
 
 class CompilerError(Exception):
     """Raised when compilation fails."""
@@ -282,20 +291,32 @@ class WasmSandbox:
             # WASM sees /tmp, but it's actually our isolated directory
             cmd.extend(["--dir", f"{sandbox_tmp}::/tmp"])
             
+            # Track copied directories for ephemeral mode
+            dir_copies = {}
+            
             # Additional filesystem access
             if cfg.allow_fs_read or cfg.allow_fs_write:
                 for dir_spec in cfg.allowed_dirs:
                     if ':' in dir_spec:
-                        path, mode = dir_spec.rsplit(':', 1)
-                        if mode == 'ro' or (not cfg.allow_fs_write):
-                            cmd.extend(["--dir", f"{path}::ro"])
-                        else:
-                            cmd.extend(["--dir", path])
+                        host_path, mode = dir_spec.rsplit(':', 1)
                     else:
-                        if cfg.allow_fs_write:
-                            cmd.extend(["--dir", dir_spec])
-                        else:
-                            cmd.extend(["--dir", f"{dir_spec}::ro"])
+                        host_path = dir_spec
+                        mode = 'rw' if cfg.allow_fs_write else 'ro'
+                    
+                    host_path = Path(host_path).resolve()
+                    
+                    if cfg.ephemeral and mode == 'rw' and host_path.exists():
+                        # Ephemeral mode: copy directory to temp location
+                        # WASM writes to copy, original untouched
+                        copy_dir = tmpdir / f"copy_{host_path.name}"
+                        shutil.copytree(host_path, copy_dir)
+                        dir_copies[str(host_path)] = copy_dir
+                        cmd.extend(["--dir", f"{copy_dir}::{host_path}"])
+                    elif mode == 'ro' or (not cfg.allow_fs_write):
+                        cmd.extend(["--dir", f"{host_path}::ro"])
+                    else:
+                        # Non-ephemeral write: direct access (dangerous)
+                        cmd.extend(["--dir", str(host_path)])
             
             # Environment variables (only if allowed)
             if cfg.allow_env:
@@ -315,11 +336,26 @@ class WasmSandbox:
                     input=cfg.stdin,
                 )
                 
+                # Collect output files from sandbox /tmp
+                output_files = {}
+                if cfg.collect_output_files:
+                    for f in sandbox_tmp.iterdir():
+                        if f.is_file() and f.stat().st_size < cfg.max_output:
+                            output_files[f.name] = f.read_bytes()
+                    
+                    # Optionally copy to output directory
+                    if cfg.output_dir:
+                        out_dir = Path(cfg.output_dir)
+                        out_dir.mkdir(parents=True, exist_ok=True)
+                        for name, data in output_files.items():
+                            (out_dir / name).write_bytes(data)
+                
                 return ExecutionResult(
                     success=(result.returncode == 0),
                     returncode=result.returncode,
                     stdout=result.stdout[:cfg.max_output],
                     stderr=result.stderr[:cfg.max_output],
+                    output_files=output_files,
                 )
                 
             except subprocess.TimeoutExpired:
@@ -338,6 +374,9 @@ class WasmSandbox:
                     stderr="",
                     error=str(e),
                 )
+            
+            # Note: tempfile.TemporaryDirectory automatically cleans up
+            # All writes in ephemeral mode are discarded here
     
     def exec(self, source: str, lang: Optional[Language] = None,
              config: Optional[SandboxConfig] = None) -> ExecutionResult:
