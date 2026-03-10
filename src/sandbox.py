@@ -6,6 +6,7 @@ High-level API for compiling and executing code in WASM sandbox.
 """
 
 import subprocess
+import sys
 import tempfile
 import shutil
 import json
@@ -726,5 +727,4 @@ def main():
             exit(result.returncode if result.success else 1)
 
 if __name__ == "__main__":
-    import sys
     main()
