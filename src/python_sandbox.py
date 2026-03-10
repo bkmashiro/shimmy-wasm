@@ -11,12 +11,13 @@ Options:
 """
 
 import subprocess
+import sys
 import tempfile
 import json
 import shutil
 from pathlib import Path
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List
 
 # ============================================================
 # Configuration
@@ -29,7 +30,7 @@ class PythonSandboxConfig:
     memory_mb: int = 256  # Python needs more memory
     fuel: int = 10_000_000_000  # Python is slower, needs more fuel
     allow_imports: bool = False  # Allow importing modules
-    allowed_modules: list = None  # Whitelist of allowed modules
+    allowed_modules: Optional[List[str]] = None  # Whitelist of allowed modules
 
 # ============================================================
 # Pyodide Support
@@ -272,5 +273,4 @@ def main():
     exit(0 if result.success else 1)
 
 if __name__ == "__main__":
-    import sys
     main()
