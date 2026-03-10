@@ -685,7 +685,9 @@ def main():
             timeout=args.timeout,
             memory_mb=args.memory,
             fuel=args.fuel,
+            allow_fs_read=bool(args.dirs),
             allowed_dirs=args.dirs,
+            allow_env=bool(env_dict),
             env=env_dict,
             stdin=args.stdin,
         )
