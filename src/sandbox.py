@@ -387,6 +387,15 @@ class WasmSandbox:
     
     def _find_wasi_sdk(self) -> Optional[Path]:
         """Find WASI SDK installation."""
+        import os
+
+        # Check WASI_SDK_PATH environment variable first
+        env_path = os.environ.get("WASI_SDK_PATH")
+        if env_path:
+            p = Path(env_path)
+            if p.exists() and (p / "bin" / "clang").exists():
+                return p
+
         # Common locations
         locations = [
             Path("/opt/wasi-sdk"),
@@ -395,11 +404,11 @@ class WasmSandbox:
             # macOS Homebrew
             Path("/opt/homebrew/opt/wasi-sdk"),
         ]
-        
+
         for loc in locations:
             if loc.exists() and (loc / "bin" / "clang").exists():
                 return loc
-        
+
         return None
     
     def run(self, wasm: bytes, config: Optional[SandboxConfig] = None) -> ExecutionResult:
