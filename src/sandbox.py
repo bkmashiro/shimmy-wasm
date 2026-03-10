@@ -447,10 +447,6 @@ class WasmSandbox:
             if cfg.enable_debug:
                 cmd.append("--debug-info")
             
-            # Arguments
-            if cfg.allow_args and cfg.args:
-                # Args go after -- and wasm file
-            
             # Always provide isolated /tmp (mapped to sandbox_tmp)
             # WASM sees /tmp, but it's actually our isolated directory
             cmd.extend(["--dir", f"{sandbox_tmp}::/tmp"])
@@ -489,7 +485,11 @@ class WasmSandbox:
             
             # Add WASM file
             cmd.append(str(wasm_path))
-            
+
+            # Arguments (must come after the WASM file)
+            if cfg.allow_args and cfg.args:
+                cmd.extend(cfg.args)
+
             # Execute
             try:
                 result = subprocess.run(
