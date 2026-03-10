@@ -195,7 +195,7 @@ CAPABILITY_SAFETY = """
 - Direct memory access outside sandbox
 """
 
-@dataclass 
+@dataclass
 class ExecutionResult:
     """Result of sandbox execution."""
     success: bool
@@ -206,6 +206,17 @@ class ExecutionResult:
     fuel_consumed: int = 0
     time_ms: int = 0
     output_files: Dict[str, bytes] = field(default_factory=dict)  # Files from /tmp
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dict (output_files excluded for JSON safety)."""
+        return {
+            "success": self.success,
+            "returncode": self.returncode,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "error": self.error,
+            "time_ms": self.time_ms,
+        }
 
 @dataclass
 class SandboxResult:
@@ -705,14 +716,7 @@ def main():
         result = sandbox.run(wasm, config)
         
         if args.json:
-            print(json.dumps({
-                "success": result.success,
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "error": result.error,
-                "time_ms": result.time_ms,
-            }))
+            print(json.dumps(result.to_dict()))
         else:
             if result.stdout:
                 print(result.stdout, end="")
@@ -729,14 +733,7 @@ def main():
         result = sandbox.exec(args.source, lang, config)
 
         if args.json:
-            print(json.dumps({
-                "success": result.success,
-                "returncode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "error": result.error,
-                "time_ms": result.time_ms,
-            }))
+            print(json.dumps(result.to_dict()))
         else:
             if result.stdout:
                 print(result.stdout, end="")
