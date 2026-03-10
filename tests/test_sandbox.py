@@ -215,20 +215,44 @@ int main() {
 class TestValidation:
     """Tests that don't require wasmtime."""
 
-    def test_invalid_wasm_binary(self):
-        """run() rejects invalid WASM bytes."""
-        from src.sandbox import WasmSandbox, ExecutionResult
-        # Bypass _check_dependencies by directly testing validation logic
+    def _make_sandbox(self):
+        """Create a WasmSandbox without running _check_dependencies."""
         sandbox = object.__new__(WasmSandbox)
         sandbox.config = SandboxConfig()
+        return sandbox
+
+    def test_detect_language_c(self):
+        """Detect C from .c extension."""
+        sandbox = self._make_sandbox()
+        assert sandbox._detect_language(Path("test.c")) == Language.C
+
+    def test_detect_language_cpp(self):
+        """Detect C++ from various extensions."""
+        sandbox = self._make_sandbox()
+        assert sandbox._detect_language(Path("test.cpp")) == Language.CPP
+        assert sandbox._detect_language(Path("test.cc")) == Language.CPP
+
+    def test_detect_language_rust(self):
+        """Detect Rust from .rs extension."""
+        sandbox = self._make_sandbox()
+        assert sandbox._detect_language(Path("test.rs")) == Language.RUST
+
+    def test_detect_language_unknown(self):
+        """Unknown extension raises CompilerError."""
+        sandbox = self._make_sandbox()
+        with pytest.raises(CompilerError):
+            sandbox._detect_language(Path("test.xyz"))
+
+    def test_invalid_wasm_binary(self):
+        """run() rejects invalid WASM bytes."""
+        sandbox = self._make_sandbox()
         result = sandbox.run(b"not wasm data")
         assert not result.success
         assert "magic number" in result.error
 
     def test_empty_wasm_binary(self):
         """run() rejects empty bytes."""
-        sandbox = object.__new__(WasmSandbox)
-        sandbox.config = SandboxConfig()
+        sandbox = self._make_sandbox()
         result = sandbox.run(b"")
         assert not result.success
 
