@@ -414,7 +414,16 @@ class WasmSandbox:
             ExecutionResult
         """
         cfg = config or self.config
-        
+
+        if len(wasm) < 4 or wasm[:4] != b'\x00asm':
+            return ExecutionResult(
+                success=False,
+                returncode=-1,
+                stdout="",
+                stderr="",
+                error="Invalid WASM binary (missing \\x00asm magic number)",
+            )
+
         with tempfile.TemporaryDirectory(prefix="shimmy_wasm_") as tmpdir:
             tmpdir = Path(tmpdir)
             
