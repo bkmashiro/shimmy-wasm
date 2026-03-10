@@ -5,6 +5,9 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=[],
+    extras_require={
+        "dev": ["pytest>=7.0.0"],
+    },
     entry_points={
         "console_scripts": [
             "shimmy-wasm=src.sandbox:main",
