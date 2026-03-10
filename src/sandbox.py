@@ -656,6 +656,7 @@ def main():
     exec_parser.add_argument("source", help="Source file")
     exec_parser.add_argument("--timeout", type=int, default=5)
     exec_parser.add_argument("--memory", type=int, default=128)
+    exec_parser.add_argument("--fuel", type=int, default=1_000_000_000)
     exec_parser.add_argument("--lang", choices=["c", "cpp", "rust", "go"])
     exec_parser.add_argument("--json", action="store_true")
     
@@ -713,7 +714,7 @@ def main():
     
     elif args.command == "exec":
         lang = Language(args.lang) if args.lang else None
-        config = SandboxConfig(timeout=args.timeout, memory_mb=args.memory)
+        config = SandboxConfig(timeout=args.timeout, memory_mb=args.memory, fuel=args.fuel)
         
         result = sandbox.exec(args.source, lang, config)
         
