@@ -387,10 +387,10 @@ int main() {
 int main() {
     char* allowed = getenv("ALLOWED_VAR");
     char* secret = getenv("PATH");
-    
+
     if (allowed) printf("allowed=%s\\n", allowed);
     if (secret) printf("FAIL: PATH leaked\\n");
-    
+
     return 0;
 }
 '''
@@ -401,6 +401,43 @@ int main() {
         result = sandbox.exec(code, Language.C, config)
         assert "allowed=test_value" in result.stdout or not config.allow_env
         assert "FAIL" not in result.stdout
+
+# ============================================================
+# Combined Isolation Tests
+# ============================================================
+
+class TestCombinedIsolation:
+    """Test that multiple isolation mechanisms work together."""
+
+    def test_no_host_info_leak(self, sandbox):
+        """WASM sandbox should not leak host information."""
+        code = '''
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // None of these should reveal host info
+    char* home = getenv("HOME");
+    char* user = getenv("USER");
+    if (home) { printf("FAIL: HOME=%s\\n", home); return 1; }
+    if (user) { printf("FAIL: USER=%s\\n", user); return 1; }
+    printf("OK: no host info\\n");
+    return 0;
+}
+'''
+        result = sandbox.exec(code, Language.C)
+        assert "FAIL" not in result.stdout
+
+    def test_default_config_is_safe(self):
+        """Default SandboxConfig should be maximally restrictive for I/O."""
+        cfg = SandboxConfig()
+        assert cfg.ephemeral is True
+        assert cfg.allow_fs_read is False
+        assert cfg.allow_fs_write is False
+        assert cfg.allow_env is False
+        assert cfg.allow_tcp_listen is False
+        assert cfg.allow_tcp_connect is False
+        assert cfg.allow_udp is False
 
 # ============================================================
 # Run Tests
