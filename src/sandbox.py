@@ -702,6 +702,7 @@ def main():
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "error": result.error,
+                "time_ms": result.time_ms,
             }))
         else:
             if result.stdout:
@@ -711,13 +712,13 @@ def main():
             if result.error:
                 print(f"Error: {result.error}", file=sys.stderr)
             exit(result.returncode)
-    
+
     elif args.command == "exec":
         lang = Language(args.lang) if args.lang else None
         config = SandboxConfig(timeout=args.timeout, memory_mb=args.memory, fuel=args.fuel)
-        
+
         result = sandbox.exec(args.source, lang, config)
-        
+
         if args.json:
             print(json.dumps({
                 "success": result.success,
@@ -725,6 +726,7 @@ def main():
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "error": result.error,
+                "time_ms": result.time_ms,
             }))
         else:
             if result.stdout:
