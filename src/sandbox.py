@@ -444,11 +444,8 @@ class WasmSandbox:
             if not cfg.allow_random:
                 cmd.append("--wasi=cli:deny-random")
             
-            # Threading
-            if cfg.allow_threads:
-                cmd.append("--wasm-threads=y")
-                cmd.extend(["--max-threads", str(cfg.max_threads)])
-            
+            # Threading: intentionally not implemented (see SandboxConfig comments)
+
             # SIMD
             if not cfg.allow_simd:
                 cmd.append("--wasm-simd=n")
