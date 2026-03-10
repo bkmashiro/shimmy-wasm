@@ -261,10 +261,39 @@ int main() {
             max_output=1024,  # 1KB limit
         )
         result = sandbox.exec(code, Language.C, config)
-        
+
         # Large files should be truncated or skipped
         for name, data in result.output_files.items():
             assert len(data) <= config.max_output
+
+# ============================================================
+# Temp File Cleanup Tests
+# ============================================================
+
+class TestTempCleanup:
+    """Test that temporary files are properly cleaned up."""
+
+    def test_sandbox_tmp_cleaned_after_run(self, sandbox):
+        """Sandbox temp directory should be cleaned up after execution."""
+        import glob
+
+        before = set(glob.glob("/tmp/shimmy_wasm_*"))
+        code = '''
+#include <stdio.h>
+int main() { printf("cleanup test\\n"); return 0; }
+'''
+        sandbox.exec(code, Language.C)
+        after = set(glob.glob("/tmp/shimmy_wasm_*"))
+
+        # No new shimmy temp dirs should remain
+        new_dirs = after - before
+        assert len(new_dirs) == 0, f"Leaked temp dirs: {new_dirs}"
+
+    def test_config_defaults_ephemeral(self):
+        """Default config should have ephemeral=True."""
+        cfg = SandboxConfig()
+        assert cfg.ephemeral is True
+        assert cfg.collect_output_files is False
 
 # ============================================================
 # Run Tests
