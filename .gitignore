@@ -6,3 +6,6 @@ __pycache__/
 dist/
 *.egg-info/
 .DS_Store
+.pytest_cache/
+benchmark_results.json
+.claude/
