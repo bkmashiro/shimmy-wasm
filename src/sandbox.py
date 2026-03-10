@@ -223,7 +223,7 @@ class CompilerError(Exception):
     """Raised when compilation fails."""
     pass
 
-class RuntimeError(Exception):
+class SandboxRuntimeError(Exception):
     """Raised when WASM execution fails."""
     pass
 

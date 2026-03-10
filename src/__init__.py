@@ -1,5 +1,5 @@
 from .sandbox import WasmSandbox, SandboxConfig, ExecutionResult, SandboxResult, Language
-from .sandbox import CompilerError, RuntimeError
+from .sandbox import CompilerError, SandboxRuntimeError
 from .python_sandbox import PythonWasmSandbox, PythonSandboxConfig, PythonResult
 
 __all__ = [
@@ -9,7 +9,7 @@ __all__ = [
     'SandboxResult',
     'Language',
     'CompilerError',
-    'RuntimeError',
+    'SandboxRuntimeError',
     'PythonWasmSandbox',
     'PythonSandboxConfig',
     'PythonResult',
