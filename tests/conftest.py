@@ -15,9 +15,10 @@ requires_wasi_sdk = pytest.mark.skipif(
 
 
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip tests that need wasmtime when it's not installed."""
+    """Auto-skip tests that use the sandbox fixture when wasmtime is not installed."""
     if shutil.which("wasmtime"):
         return
     skip = pytest.mark.skip(reason="wasmtime not installed")
     for item in items:
-        item.add_marker(skip)
+        if "sandbox" in item.fixturenames:
+            item.add_marker(skip)

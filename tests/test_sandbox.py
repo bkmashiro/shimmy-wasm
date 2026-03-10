@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.sandbox import WasmSandbox, SandboxConfig, Language, CompilerError
+from src.sandbox import WasmSandbox, SandboxConfig, SandboxResult, Language, CompilerError
 
 # ============================================================
 # Test Fixtures
@@ -207,6 +207,77 @@ int main() {
         config = SandboxConfig(memory_mb=16, timeout=5)
         result = sandbox.exec(memory_bomb_c, Language.C, config)
         # Should fail due to memory limit or allocation failure
+
+# ============================================================
+# run_string() Tests
+# ============================================================
+
+class TestRunString:
+    """Test the run_string() convenience API."""
+
+    def test_run_string_c_hello(self, sandbox):
+        """run_string returns SandboxResult with correct fields."""
+        code = '''
+#include <stdio.h>
+int main() {
+    printf("hello from run_string\\n");
+    return 0;
+}
+'''
+        result = sandbox.run_string(code, Language.C)
+        assert isinstance(result, SandboxResult)
+        assert result.success
+        assert result.exit_code == 0
+        assert "hello from run_string" in result.stdout
+        assert result.time_ms >= 0
+        assert result.memory_kb > 0
+
+    def test_run_string_with_stdin(self, sandbox):
+        """run_string passes stdin correctly."""
+        code = '''
+#include <stdio.h>
+int main() {
+    char buf[256];
+    if (fgets(buf, sizeof(buf), stdin)) {
+        printf("got: %s", buf);
+    }
+    return 0;
+}
+'''
+        result = sandbox.run_string(code, Language.C, stdin="test input\n")
+        assert result.success
+        assert "got: test input" in result.stdout
+
+    def test_run_string_nonzero_exit(self, sandbox):
+        """run_string captures non-zero exit codes."""
+        code = 'int main() { return 42; }'
+        result = sandbox.run_string(code, Language.C)
+        assert not result.success
+        assert result.exit_code == 42
+
+    def test_run_string_stderr(self, sandbox):
+        """run_string captures stderr output."""
+        code = '''
+#include <stdio.h>
+int main() {
+    fprintf(stderr, "error message\\n");
+    return 1;
+}
+'''
+        result = sandbox.run_string(code, Language.C)
+        assert "error message" in result.stderr
+
+    def test_run_string_timeout(self, sandbox):
+        """run_string respects timeout parameter."""
+        code = 'int main() { while(1) {} return 0; }'
+        result = sandbox.run_string(code, Language.C, timeout=2)
+        assert not result.success
+
+    def test_run_string_compile_error(self, sandbox):
+        """run_string handles compilation errors."""
+        result = sandbox.run_string("invalid code {{{", Language.C)
+        assert not result.success
+        assert result.exit_code != 0
 
 # ============================================================
 # Run Tests
