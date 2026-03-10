@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import shutil
 import json
+import time
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
@@ -204,6 +205,19 @@ class ExecutionResult:
     fuel_consumed: int = 0
     time_ms: int = 0
     output_files: Dict[str, bytes] = field(default_factory=dict)  # Files from /tmp
+
+@dataclass
+class SandboxResult:
+    """Simplified result for run_string() convenience API."""
+    stdout: str
+    stderr: str
+    exit_code: int
+    time_ms: float
+    memory_kb: int = 0
+
+    @property
+    def success(self) -> bool:
+        return self.exit_code == 0
 
 class CompilerError(Exception):
     """Raised when compilation fails."""
@@ -492,6 +506,7 @@ class WasmSandbox:
 
             # Execute
             try:
+                t0 = time.monotonic()
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
@@ -499,29 +514,31 @@ class WasmSandbox:
                     timeout=cfg.timeout + 5,
                     input=cfg.stdin,
                 )
-                
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+
                 # Collect output files from sandbox /tmp
                 output_files = {}
                 if cfg.collect_output_files:
                     for f in sandbox_tmp.iterdir():
                         if f.is_file() and f.stat().st_size < cfg.max_output:
                             output_files[f.name] = f.read_bytes()
-                    
+
                     # Optionally copy to output directory
                     if cfg.output_dir:
                         out_dir = Path(cfg.output_dir)
                         out_dir.mkdir(parents=True, exist_ok=True)
                         for name, data in output_files.items():
                             (out_dir / name).write_bytes(data)
-                
+
                 return ExecutionResult(
                     success=(result.returncode == 0),
                     returncode=result.returncode,
                     stdout=result.stdout[:cfg.max_output],
                     stderr=result.stderr[:cfg.max_output],
+                    time_ms=elapsed_ms,
                     output_files=output_files,
                 )
-                
+
             except subprocess.TimeoutExpired:
                 return ExecutionResult(
                     success=False,
@@ -566,6 +583,39 @@ class WasmSandbox:
                 stderr="",
                 error=f"Compilation error: {e}",
             )
+
+    def run_string(self, code: str, language: Language,
+                   stdin: Optional[str] = None,
+                   timeout: int = 5,
+                   memory_mb: int = 128) -> SandboxResult:
+        """
+        Convenience API: compile and run a code string, returning a simple result.
+
+        Args:
+            code: Source code string
+            language: Programming language
+            stdin: Optional stdin data
+            timeout: Execution timeout in seconds
+            memory_mb: Memory limit in MB
+
+        Returns:
+            SandboxResult with stdout, stderr, exit_code, time_ms, memory_kb
+        """
+        config = SandboxConfig(
+            timeout=timeout,
+            memory_mb=memory_mb,
+            stdin=stdin,
+        )
+        t0 = time.monotonic()
+        result = self.exec(code, language, config)
+        elapsed_ms = round((time.monotonic() - t0) * 1000, 1)
+        return SandboxResult(
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.returncode,
+            time_ms=elapsed_ms,
+            memory_kb=memory_mb * 1024,  # configured limit (actual usage not tracked by wasmtime CLI)
+        )
 
 # ============================================================
 # CLI
