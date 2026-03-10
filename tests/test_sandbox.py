@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.sandbox import WasmSandbox, SandboxConfig, SandboxResult, Language, CompilerError
+from src.sandbox import WasmSandbox, SandboxConfig, SandboxResult, ExecutionResult, Language, CompilerError
 
 # ============================================================
 # Test Fixtures
@@ -262,6 +262,18 @@ class TestValidation:
         assert r1.success is True
         r2 = SandboxResult(stdout="", stderr="", exit_code=1, time_ms=0)
         assert r2.success is False
+
+    def test_execution_result_to_dict(self):
+        """ExecutionResult.to_dict() returns correct keys."""
+        r = ExecutionResult(
+            success=True, returncode=0,
+            stdout="hello", stderr="", time_ms=42
+        )
+        d = r.to_dict()
+        assert d["success"] is True
+        assert d["stdout"] == "hello"
+        assert d["time_ms"] == 42
+        assert "output_files" not in d  # excluded for JSON safety
 
 # ============================================================
 # run_string() Tests
