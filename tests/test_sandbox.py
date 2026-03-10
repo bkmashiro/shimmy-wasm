@@ -209,6 +209,37 @@ int main() {
         # Should fail due to memory limit or allocation failure
 
 # ============================================================
+# Validation Tests (no wasmtime required)
+# ============================================================
+
+class TestValidation:
+    """Tests that don't require wasmtime."""
+
+    def test_invalid_wasm_binary(self):
+        """run() rejects invalid WASM bytes."""
+        from src.sandbox import WasmSandbox, ExecutionResult
+        # Bypass _check_dependencies by directly testing validation logic
+        sandbox = object.__new__(WasmSandbox)
+        sandbox.config = SandboxConfig()
+        result = sandbox.run(b"not wasm data")
+        assert not result.success
+        assert "magic number" in result.error
+
+    def test_empty_wasm_binary(self):
+        """run() rejects empty bytes."""
+        sandbox = object.__new__(WasmSandbox)
+        sandbox.config = SandboxConfig()
+        result = sandbox.run(b"")
+        assert not result.success
+
+    def test_sandbox_result_success_property(self):
+        """SandboxResult.success reflects exit_code."""
+        r1 = SandboxResult(stdout="", stderr="", exit_code=0, time_ms=0)
+        assert r1.success is True
+        r2 = SandboxResult(stdout="", stderr="", exit_code=1, time_ms=0)
+        assert r2.success is False
+
+# ============================================================
 # run_string() Tests
 # ============================================================
 
